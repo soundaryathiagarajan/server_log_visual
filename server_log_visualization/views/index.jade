@@ -1,0 +1,112 @@
+extends layout
+
+block content
+  h3.heading
+  #canvasContainer.text-center
+  #qpsContainer.text-center
+  
+  script(src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.0/jquery.min.js")
+  script(src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/1.0.2/Chart.min.js")
+  script(src="https://cdn.socket.io/socket.io-1.4.3.js")
+  script(type='text/javascript').
+    (function($) {
+      var socket = io.connect('http://localhost:9000', { transports: [ 'websocket', 'flashsocket' ], 'forceNew' : true });
+      window.socket = socket;
+      var container = document.getElementById('canvasContainer');
+      var qpsContainer = document.getElementById('qpsContainer');
+      window.onbeforeunload = function(){
+        this.socket.disconnect();
+        this.socket.close();
+      }
+      
+      socket.on('newData', function(items) {
+        if(items.avg_res_time && items.avg_res_time.length){
+          container.innerHTML = '';
+          qpsContainer.innerHTML = '';
+          var canvas = document.createElement('canvas');
+          canvas.id     = "myChart";
+          canvas.width  = 900;
+          canvas.height = 250;
+          $('#canvasContainer').append('<h4>Minimum, Maximum and Mean Latency in seconds at a particular timeframe</h4><span class="y-axis-label inline-block">Latency (seconds)</span>');
+
+          container.appendChild(canvas);
+          var ctx = canvas.getContext("2d");
+          
+          $('#qpsContainer').append('<h4>Number of queries at a particular timeframe</h4><span class="y-axis-label inline-block">Qps</span>');
+          var qps_canvas = document.createElement('canvas');
+          qps_canvas.id     = "myChart";
+          qps_canvas.width  = 900;
+          qps_canvas.height = 250;
+          qpsContainer.appendChild(qps_canvas);
+          var qpsctx = qps_canvas.getContext("2d");
+          var label_map = [],list_text ='';
+          items.timeframe.forEach(function(val,index){
+            var temp_val = (new Date(val*1000)).toString().split(' GMT')[0].split(' ');
+            label_map.push(temp_val[temp_val.length - 1]);
+          });
+          Chart.defaults.global.animation = false;
+          var data = {
+            labels: label_map,
+            datasets: [
+                {
+                    label: "My Min dataset",
+                    fillColor: "rgba(151,187,205,0.1)",
+                    strokeColor: "#54D271",
+                    pointColor: "#54D271",
+                    pointStrokeColor: "#54D271",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "#fff",
+                    data: items.min
+                },
+                {
+                    label: "My Average dataset",
+                    fillColor: "rgba(151,187,205,0.1)",
+                    strokeColor: "#FDB45C",                    
+                    pointColor: "#FDB45C",
+                    pointStrokeColor: "#FDB45C",
+                    pointstrokeColor: "#fff",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "#fff",
+                    data: items.avg_res_time
+                },
+                {
+                    label: "My Max dataset",
+                    fillColor: "rgba(151,187,205,0.1)",
+                    strokeColor: "#E63D3D",
+                    pointColor: "#E63D3D",
+                    pointStrokeColor: "#E63D3D",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "#fff",
+                    data: items.max
+                }
+            ]
+        };
+        var maxNum = Math.max.apply(null,items.max);
+        var myLineChart = new Chart(ctx).Line(data,{
+          scaleOverride: true, scaleStartValue: 0, scaleStepWidth: 1,
+          scaleSteps: maxNum > 10 ? Math.ceil(maxNum) : 10
+        });
+        var maxQps = Math.max.apply(null,items.qps);
+        var qps_data = {
+            labels: label_map,
+            datasets: [
+                {
+                    label: "My qps dataset",
+                    fillColor: "rgba(151,187,205,0.1)",
+                    strokeColor: "#FDB45C",
+                    pointColor: "#FDB45C",
+                    pointStrokeColor: "#FDB45C",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "#fff",
+                    data: items.qps
+                }
+            ]
+        };
+        var myBarChart = new Chart(qpsctx).Line(qps_data,{scaleOverride: true, scaleStartValue: 0, scaleStepWidth: 1,
+          scaleSteps: maxQps > 10 ? Math.ceil(maxQps) : 10});
+
+        $('.heading').html("Performance on <span class='text-bold'>" + (new Date(items.timeframe[0]*1000)).toString().split(' ').slice(0,4).join(' ') + "</span>");
+      };
+      });
+    })(jQuery);
+    
